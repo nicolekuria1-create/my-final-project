@@ -83,5 +83,140 @@ document.addEventListener('DOMContentLoaded', () => {
         const anyBtn = document.querySelector('button[type="submit"], button#calculate');
         if (anyBtn) anyBtn.addEventListener('click', calculateAndShow);
     }
+
+    // ----- Join form: persist and render members list -----
+    function getMembers() {
+        const raw = localStorage.getItem('members');
+        return raw ? JSON.parse(raw) : [];
+    }
+
+    function saveMembers(members) {
+        localStorage.setItem('members', JSON.stringify(members));
+    }
+
+    function deleteMember(index) {
+        const members = getMembers();
+        members.splice(index, 1);
+        saveMembers(members);
+        renderMembers();
+    }
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        setTimeout(() => toast.classList.remove('show'), 2400);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function renderMembers() {
+        const list = document.getElementById('membersList');
+        if (!list) return;
+
+        const countEl = document.getElementById('memberCount');
+        const clubFilter = clubSelect ? clubSelect.value : '';
+        const members = getMembers();
+        const filtered = clubFilter ? members.filter(m => m.club === clubFilter) : members;
+
+        if (countEl) countEl.textContent = String(filtered.length);
+
+        if (filtered.length === 0) {
+            list.innerHTML = '<li>No members yet.</li>';
+            return;
+        }
+        list.innerHTML = filtered.map((m, idx) => {
+            const activity = m.activity ? ` (${m.activity})` : '';
+            return `
+                <li>
+                    <span>${m.name} — ${m.club}${activity}</span>
+                    <button type="button" class="delete-btn" data-index="${idx}">Exit</button>
+                </li>
+            `;
+        }).join('');
+        
+        // Attach delete event listeners
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const idx = parseInt(this.getAttribute('data-index'));
+                const members = getMembers();
+                const clubFilteredMembers = clubFilter ? members.filter(m => m.club === clubFilter) : members;
+                const target = clubFilteredMembers[idx];
+                if (!target) return;
+                const targetIndex = members.findIndex(m => m.joined === target.joined && m.name === target.name);
+                if (targetIndex > -1) deleteMember(targetIndex);
+            });
+        });
+    }
+
+    const joinForm = document.getElementById('joinForm');
+    const sportSelect = document.getElementById('sportOption');
+    const clubSelect = document.getElementById('club');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const joinBtn = document.getElementById('joinBtn');
+
+    // show/hide sports sub-options when Sports Club is selected
+    if (clubSelect && sportSelect) {
+        clubSelect.addEventListener('change', function () {
+            if (this.value === 'Sports Club') {
+                sportSelect.style.display = 'block';
+            } else {
+                sportSelect.style.display = 'none';
+                sportSelect.value = '';
+            }
+            renderMembers();
+        });
+    }
+    if (joinForm) {
+        joinForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const nameEl = document.getElementById('name');
+            const clubEl = document.getElementById('club');
+            const msg = document.getElementById('message');
+            const toastToggle = document.getElementById('toastToggle');
+            const name = nameEl ? nameEl.value.trim() : '';
+            const club = clubEl ? clubEl.value : '';
+            const activity = (club === 'Sports Club' && sportSelect) ? (sportSelect.value || '') : '';
+
+            if (!name || !club) {
+                if (msg) msg.textContent = 'Please enter your name and choose a club.';
+                return;
+            }
+
+            const members = getMembers();
+            const joinedStamp = new Date().toISOString();
+            members.push({ name: name, club: club, activity: activity, joined: joinedStamp });
+            saveMembers(members);
+            renderMembers();
+
+            const clubMembers = members.filter(m => m.club === club);
+            const updatedCount = clubMembers.length;
+            if (!toastToggle || toastToggle.checked) {
+                showToast(`Registered successfully! ${club} now has ${updatedCount} participant${updatedCount === 1 ? '' : 's'}.`);
+            }
+            if (msg) msg.textContent = activity ? `Thanks ${name}, you joined ${club} (${activity}).` : `Thanks ${name}, you joined ${club}.`;
+            joinForm.reset();
+            // hide sport select after reset
+            if (sportSelect) sportSelect.style.display = 'none';
+        });
+    }
+
+    if (joinBtn && joinForm) {
+        joinBtn.addEventListener('click', function () {
+            joinForm.requestSubmit();
+        });
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', function () {
+            saveMembers([]);
+            renderMembers();
+            showToast('All members cleared.');
+        });
+    }
+
+    // render persisted members on load
+    renderMembers();
 });
 
